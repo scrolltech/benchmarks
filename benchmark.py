@@ -1,6 +1,7 @@
 import re
 import subprocess
 from collections import defaultdict, namedtuple
+from datetime import datetime
 from time import sleep
 
 import requests
@@ -71,6 +72,7 @@ if __name__ == '__main__':
     results = defaultdict(list)
     for name, server in SERVERS.items():
         try:
+            print("Testing {} {}".format(name, datetime.now().isoformat()))
             process = run_server(server)
             sleep(5)
             test_server(server)
@@ -80,7 +82,6 @@ if __name__ == '__main__':
             process.terminate()
             process.wait()
     graph = Pyasciigraph()
-    for line in  graph.graph('get requests/second', sorted(results['get'], key=lambda result: result[1])):
-        print(line)
-    for line in  graph.graph('post requests/second', sorted(results['post'], key=lambda result: result[1])):
-        print(line)
+    for key, value in results.items():
+        for line in  graph.graph("{} requests/second".format(key), sorted(value, key=lambda result: result[1])):
+            print(line)
