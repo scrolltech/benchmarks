@@ -1,4 +1,5 @@
 from quart import Quart, request
+from quart.serving import ASGIServer
 
 app = Quart(__name__)
 
@@ -22,6 +23,8 @@ def _fib(n):
         return 1
     else:
         return _fib(n - 1) + _fib(n - 2)
+
+asgi_app = ASGIServer(app)
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000)

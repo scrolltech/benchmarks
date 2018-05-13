@@ -7,18 +7,20 @@ from time import sleep
 import requests
 from ascii_graph import Pyasciigraph
 
-Server = namedtuple('Server', ['module', 'gunicorn_worker'])
+Server = namedtuple('Server', ['module', 'gunicorn_worker', 'uvicorn'])
 
 SERVERS = {
-    'aiohttp': Server('aiohttp_server', None),
-    'aiohttp-gunicorn-uvloop': Server('aiohttp_server', 'aiohttp.worker.GunicornUVLoopWebWorker'),
-    'flask': Server('flask_server', None),
-    'flask-gunicorn-eventlet': Server('flask_server', 'eventlet'),
-    'flask-gunicorn-meinheld': Server('flask_server', 'meinheld.gmeinheld.MeinheldWorker'),
-    'quart': Server('quart_server', None),
-    'quart-gunicorn-uvloop': Server('quart_server', 'quart.worker.GunicornUVLoopWorker'),
-    'sanic': Server('sanic_server', None),
-    'sanic-gunicorn-uvloop': Server('sanic_server', 'sanic.worker.GunicornWorker'),
+    'aiohttp': Server('aiohttp_server', None, None),
+    'aiohttp-gunicorn-uvloop': Server('aiohttp_server', 'aiohttp.worker.GunicornUVLoopWebWorker', None),
+    'flask': Server('flask_server', None, None),
+    'flask-gunicorn-eventlet': Server('flask_server', 'eventlet', None),
+    'flask-gunicorn-meinheld': Server('flask_server', 'meinheld.gmeinheld.MeinheldWorker', None),
+    'quart': Server('quart_server', None, None),
+    'quart-gunicorn': Server('quart_server', 'quart.worker.GunicornWorker', None),
+    'quart-gunicorn-uvloop': Server('quart_server', 'quart.worker.GunicornUVLoopWorker', None),
+    'quart-uvicorn': Server('quart_server', None, 'asgi_app'),
+    'sanic': Server('sanic_server', None, None),
+    'sanic-gunicorn-uvloop': Server('sanic_server', 'sanic.worker.GunicornWorker', None),
 }
 
 REQUESTS_SECOND_RE = re.compile(r'Requests\/sec\:\s*(?P<reqsec>\d+\.\d+)(?P<unit>[kMG])?')
@@ -32,15 +34,20 @@ PORT = 5000
 
 
 def run_server(server):
-    if server.gunicorn_worker is None:
+    if server.gunicorn_worker is not None:
         return subprocess.Popen(
-            ['python', "{}.py".format(server.module)], cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            ['gunicorn', "{}:app".format(server.module), '--worker-class',  server.gunicorn_worker, '-b', "{}:{}".format(HOST, PORT)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            cwd='servers',
+        )
+    elif server.uvicorn is not None:
+        return subprocess.Popen(
+            ['uvicorn', "{}:{}".format(server.module, server.uvicorn), '-b', "{}:{}".format(HOST, PORT)],
+            cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     else:
         return subprocess.Popen(
-            ['gunicorn', "{}:app".format(server.module), '--worker-class',  server.gunicorn_worker, '-b', "{}:{}".format(HOST, PORT)],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            cwd='servers',
+            ['python', "{}.py".format(server.module)], cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
 
 
