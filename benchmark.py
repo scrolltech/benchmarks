@@ -7,20 +7,21 @@ from time import sleep
 import requests
 from ascii_graph import Pyasciigraph
 
-Server = namedtuple('Server', ['module', 'gunicorn_worker', 'uvicorn'])
+Server = namedtuple('Server', ['module', 'gunicorn_worker', 'uvicorn', 'daphne'])
 
 SERVERS = {
-    'aiohttp': Server('aiohttp_server', None, None),
-    'aiohttp-gunicorn-uvloop': Server('aiohttp_server', 'aiohttp.worker.GunicornUVLoopWebWorker', None),
-    'flask': Server('flask_server', None, None),
-    'flask-gunicorn-eventlet': Server('flask_server', 'eventlet', None),
-    'flask-gunicorn-meinheld': Server('flask_server', 'meinheld.gmeinheld.MeinheldWorker', None),
-    'quart': Server('quart_server', None, None),
-    'quart-gunicorn': Server('quart_server', 'quart.worker.GunicornWorker', None),
-    'quart-gunicorn-uvloop': Server('quart_server', 'quart.worker.GunicornUVLoopWorker', None),
-    'quart-uvicorn': Server('quart_server', None, 'asgi_app'),
-    'sanic': Server('sanic_server', None, None),
-    'sanic-gunicorn-uvloop': Server('sanic_server', 'sanic.worker.GunicornWorker', None),
+    'aiohttp': Server('aiohttp_server', None, None, None),
+    'aiohttp-gunicorn-uvloop': Server('aiohttp_server', 'aiohttp.worker.GunicornUVLoopWebWorker', None, None),
+    'flask': Server('flask_server', None, None, None),
+    'flask-gunicorn-eventlet': Server('flask_server', 'eventlet', None, None),
+    'flask-gunicorn-meinheld': Server('flask_server', 'meinheld.gmeinheld.MeinheldWorker', None, None),
+    'quart': Server('quart_server', None, None, None),
+    'quart-daphne': Server('quart_server', None, None, 'asgi_app'),
+    'quart-gunicorn': Server('quart_server', 'quart.worker.GunicornWorker', None, None),
+    'quart-gunicorn-uvloop': Server('quart_server', 'quart.worker.GunicornUVLoopWorker', None, None),
+    'quart-uvicorn': Server('quart_server', None, 'asgi_app', None),
+    'sanic': Server('sanic_server', None, None, None),
+    'sanic-gunicorn-uvloop': Server('sanic_server', 'sanic.worker.GunicornWorker', None, None),
 }
 
 REQUESTS_SECOND_RE = re.compile(r'Requests\/sec\:\s*(?P<reqsec>\d+\.\d+)(?P<unit>[kMG])?')
@@ -43,6 +44,11 @@ def run_server(server):
     elif server.uvicorn is not None:
         return subprocess.Popen(
             ['uvicorn', "{}:{}".format(server.module, server.uvicorn), '-b', "{}:{}".format(HOST, PORT)],
+            cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif server.daphne is not None:
+        return subprocess.Popen(
+            ['daphne', "{}:{}".format(server.module, server.daphne), '-b', HOST, '-p', str(PORT)],
             cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     else:

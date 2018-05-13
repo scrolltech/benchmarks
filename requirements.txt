@@ -1,5 +1,6 @@
 aiohttp
 ascii_graph
+daphne
 eventlet
 Flask
 gunicorn
