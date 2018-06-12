@@ -16,10 +16,10 @@ SERVERS = {
     'flask-gunicorn-eventlet': Server('flask_server', 'eventlet', None, None),
     'flask-gunicorn-meinheld': Server('flask_server', 'meinheld.gmeinheld.MeinheldWorker', None, None),
     'quart': Server('quart_server', None, None, None),
-    'quart-daphne': Server('quart_server', None, None, 'asgi_app'),
+    'quart-daphne': Server('quart_server', None, None, 'app'),
     'quart-gunicorn': Server('quart_server', 'quart.worker.GunicornWorker', None, None),
     'quart-gunicorn-uvloop': Server('quart_server', 'quart.worker.GunicornUVLoopWorker', None, None),
-    'quart-uvicorn': Server('quart_server', None, 'asgi_app', None),
+    'quart-uvicorn': Server('quart_server', None, 'app', None),
     'sanic': Server('sanic_server', None, None, None),
     'sanic-gunicorn-uvloop': Server('sanic_server', 'sanic.worker.GunicornWorker', None, None),
 }

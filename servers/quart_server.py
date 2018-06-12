@@ -1,5 +1,4 @@
 from quart import Quart, request
-from quart.serving import ASGIServer
 
 app = Quart(__name__)
 
@@ -16,6 +15,11 @@ async def post():
     return "{}-fib({})={}".format(__file__, number, _fib(int(number)))
 
 
+@app.websocket('/ws')
+async def wss():
+    return 'No', 401
+
+
 def _fib(n):
     if n == 0:
         return 0
@@ -24,7 +28,6 @@ def _fib(n):
     else:
         return _fib(n - 1) + _fib(n - 2)
 
-asgi_app = ASGIServer(app)
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000)
