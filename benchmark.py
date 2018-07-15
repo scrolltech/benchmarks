@@ -2,26 +2,37 @@ import re
 import subprocess
 from collections import defaultdict, namedtuple
 from datetime import datetime
+from enum import auto, Enum
 from time import sleep
 
 import requests
 from ascii_graph import Pyasciigraph
 
-Server = namedtuple('Server', ['module', 'gunicorn_worker', 'uvicorn', 'daphne'])
+
+class ServerType(Enum):
+    daphne = auto()
+    direct = auto()
+    gunicorn = auto()
+    hypercorn = auto()
+    uvicorn = auto()
+
+
+Server = namedtuple('Server', ['module', 'server_type', 'settings'])
 
 SERVERS = {
-    'aiohttp': Server('aiohttp_server', None, None, None),
-    'aiohttp-gunicorn-uvloop': Server('aiohttp_server', 'aiohttp.worker.GunicornUVLoopWebWorker', None, None),
-    'flask': Server('flask_server', None, None, None),
-    'flask-gunicorn-eventlet': Server('flask_server', 'eventlet', None, None),
-    'flask-gunicorn-meinheld': Server('flask_server', 'meinheld.gmeinheld.MeinheldWorker', None, None),
-    'quart': Server('quart_server', None, None, None),
-    'quart-daphne': Server('quart_server', None, None, 'app'),
-    'quart-gunicorn': Server('quart_server', 'quart.worker.GunicornWorker', None, None),
-    'quart-gunicorn-uvloop': Server('quart_server', 'quart.worker.GunicornUVLoopWorker', None, None),
-    'quart-uvicorn': Server('quart_server', None, 'app', None),
-    'sanic': Server('sanic_server', None, None, None),
-    'sanic-gunicorn-uvloop': Server('sanic_server', 'sanic.worker.GunicornWorker', None, None),
+    'aiohttp': Server('aiohttp_server', ServerType.direct, []),
+    'aiohttp-gunicorn-uvloop': Server('aiohttp_server', ServerType.gunicorn, ['--worker-class', 'aiohttp.worker.GunicornUVLoopWebWorker']),
+    'flask': Server('flask_server',ServerType.direct, []),
+    'flask-gunicorn-eventlet': Server('flask_server', ServerType.gunicorn, ['--worker-class', 'eventlet']),
+    'flask-gunicorn-meinheld': Server('flask_server', ServerType.gunicorn, ['--worker-class', 'meinheld.gmeinheld.MeinheldWorker']),
+    'quart': Server('quart_server', ServerType.direct, []),
+    'quart-daphne': Server('quart_server', ServerType.daphne, []),
+    'quart-gunicorn': Server('quart_server', ServerType.gunicorn, ['--worker-class', 'quart.worker.GunicornWorker']),
+    'quart-gunicorn-uvloop': Server('quart_server', ServerType.gunicorn, ['--worker-class', 'quart.worker.GunicornUVLoopWorker']),
+    'quart-hypercorn': Server('quart_server', ServerType.hypercorn, []),
+    'quart-uvicorn': Server('quart_server', ServerType.uvicorn, []),
+    'sanic': Server('sanic_server', ServerType.direct, []),
+    'sanic-gunicorn-uvloop': Server('sanic_server', ServerType.gunicorn, ['--worker-class', 'sanic.worker.GunicornWorker']),
 }
 
 REQUESTS_SECOND_RE = re.compile(r'Requests\/sec\:\s*(?P<reqsec>\d+\.\d+)(?P<unit>[kMG])?')
@@ -35,26 +46,34 @@ PORT = 5000
 
 
 def run_server(server):
-    if server.gunicorn_worker is not None:
+    if server.server_type == ServerType.gunicorn:
         return subprocess.Popen(
-            ['gunicorn', "{}:app".format(server.module), '--worker-class',  server.gunicorn_worker, '-b', "{}:{}".format(HOST, PORT)],
+            ['gunicorn', "{}:app".format(server.module), '-b', "{}:{}".format(HOST, PORT)] + server.settings,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             cwd='servers',
         )
-    elif server.uvicorn is not None:
+    elif server.server_type == ServerType.uvicorn:
         return subprocess.Popen(
-            ['uvicorn', "{}:{}".format(server.module, server.uvicorn), '-b', "{}:{}".format(HOST, PORT)],
+            ['uvicorn', "{}:app".format(server.module), '--host', HOST, '--port', str(PORT)] + server.settings,
             cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
-    elif server.daphne is not None:
+    elif server.server_type == ServerType.daphne:
         return subprocess.Popen(
-            ['daphne', "{}:{}".format(server.module, server.daphne), '-b', HOST, '-p', str(PORT)],
+            ['daphne', "{}:app".format(server.module), '-b', HOST, '-p', str(PORT)] + server.settings,
+            cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif server.server_type == ServerType.hypercorn:
+        return subprocess.Popen(
+            ['hypercorn', "{}:app".format(server.module), '-b', "{}:{}".format(HOST, PORT)] + server.settings,
+            cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    elif server.server_type == ServerType.direct:
+        return subprocess.Popen(
+            ['python', "{}.py".format(server.module)] + server.settings,
             cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     else:
-        return subprocess.Popen(
-            ['python', "{}.py".format(server.module)], cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
+        raise ValueError("Unknown server {}".format(server))
 
 
 def test_server(server):

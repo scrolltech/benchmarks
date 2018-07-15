@@ -30,6 +30,8 @@ PORT = 5000
 def run_server(server):
     if server.name == 'daphne':
         commands = ['daphne', 'asgi:App', '-b', HOST, '-p', str(PORT)]
+    elif server.name == 'uvicorn':
+        commands = ['uvicorn', 'asgi:App', '--host', HOST, '--port', str(PORT)]
     else:
         commands = [server.name, 'asgi:App', '-b', "{}:{}".format(HOST, PORT)]
     commands.extend(server.options)
