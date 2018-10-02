@@ -13,7 +13,8 @@ Server = namedtuple('Server', ['name', 'options'])
 SERVERS = {
     'Daphne': Server('daphne', []),
     'Hypercorn': Server('hypercorn', []),
-    'Hypercorn-uvloop': Server('hypercorn', ['--uvloop']),
+    'Hypercorn-uvloop': Server('hypercorn', ['--worker-class', 'uvloop']),
+    'Hypercorn-trio': Server('hypercorn', ['--worker-class', 'trio']),
     'Uvicorn': Server('uvicorn', []),
 }
 

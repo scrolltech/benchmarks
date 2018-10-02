@@ -1,6 +1,3 @@
-import asyncio
-
-
 class App:
 
     def __init__(self, scope):
@@ -11,13 +8,10 @@ class App:
         body = bytearray()
         while True:
             event = await receive()
-            if event['type'] == 'http.disconnect':
-                self.task.cancel()
-                break
-            elif event['type'] == 'http.request':
+            if event['type'] == 'http.request':
                 body.extend(event.get('body', b''))
                 if not event.get('more_body', False):
-                    self.task = asyncio.ensure_future(self.send_echo(send, body))
+                    await self.send_echo(send, body)
 
     async def send_echo(self, send, request_body):
         response = request_body

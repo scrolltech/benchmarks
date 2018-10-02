@@ -8,5 +8,6 @@ meinheld
 Quart
 requests
 sanic
+trio
 uvicorn
 uvloop
