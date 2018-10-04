@@ -12,6 +12,8 @@ class App:
                 body.extend(event.get('body', b''))
                 if not event.get('more_body', False):
                     await self.send_echo(send, body)
+            elif event['type'] == 'http.disconnect':
+                break
 
     async def send_echo(self, send, request_body):
         response = request_body
