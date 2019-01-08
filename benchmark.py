@@ -1,3 +1,4 @@
+import requests
 import re
 import subprocess
 from collections import defaultdict, namedtuple
@@ -5,32 +6,19 @@ from datetime import datetime
 from enum import auto, Enum
 from time import sleep
 
-import requests
-from ascii_graph import Pyasciigraph
+import numpy as np
+import matplotlib.pyplot as plt 
 
 
 class ServerType(Enum):
-    daphne = auto()
-    direct = auto()
     gunicorn = auto()
-    hypercorn = auto()
-    uvicorn = auto()
 
 
 Server = namedtuple('Server', ['module', 'server_type', 'settings'])
 
 SERVERS = {
-    'aiohttp': Server('aiohttp_server', ServerType.direct, []),
-    'aiohttp-gunicorn-uvloop': Server('aiohttp_server', ServerType.gunicorn, ['--worker-class', 'aiohttp.worker.GunicornUVLoopWebWorker']),
-    'flask': Server('flask_server',ServerType.direct, []),
-    'flask-gunicorn-eventlet': Server('flask_server', ServerType.gunicorn, ['--worker-class', 'eventlet']),
+    'flask-gunicorn-gevent': Server('flask_server', ServerType.gunicorn, ['--worker-class', 'gevent']),
     'flask-gunicorn-meinheld': Server('flask_server', ServerType.gunicorn, ['--worker-class', 'meinheld.gmeinheld.MeinheldWorker']),
-    'quart': Server('quart_server', ServerType.direct, []),
-    'quart-daphne': Server('quart_server', ServerType.daphne, []),
-    'quart-hypercorn': Server('quart_server', ServerType.hypercorn, ['--worker-class', 'uvloop']),
-    'quart-uvicorn': Server('quart_server', ServerType.uvicorn, []),
-    'sanic': Server('sanic_server', ServerType.direct, []),
-    'sanic-gunicorn-uvloop': Server('sanic_server', ServerType.gunicorn, ['--worker-class', 'sanic.worker.GunicornWorker']),
 }
 
 REQUESTS_SECOND_RE = re.compile(r'Requests\/sec\:\s*(?P<reqsec>\d+\.\d+)(?P<unit>[kMG])?')
@@ -50,26 +38,6 @@ def run_server(server):
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             cwd='servers',
         )
-    elif server.server_type == ServerType.uvicorn:
-        return subprocess.Popen(
-            ['uvicorn', "{}:app".format(server.module), '--host', HOST, '--port', str(PORT)] + server.settings,
-            cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-    elif server.server_type == ServerType.daphne:
-        return subprocess.Popen(
-            ['daphne', "{}:app".format(server.module), '-b', HOST, '-p', str(PORT)] + server.settings,
-            cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-    elif server.server_type == ServerType.hypercorn:
-        return subprocess.Popen(
-            ['hypercorn', "{}:app".format(server.module), '-b', "{}:{}".format(HOST, PORT)] + server.settings,
-            cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-    elif server.server_type == ServerType.direct:
-        return subprocess.Popen(
-            ['python', "{}.py".format(server.module)] + server.settings,
-            cwd='servers', stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
     else:
         raise ValueError("Unknown server {}".format(server))
 
@@ -78,18 +46,15 @@ def test_server(server):
     response = requests.get("http://{}:{}/10".format(HOST, PORT))
     assert response.status_code == 200
     assert server.module in response.text
-    response = requests.post("http://{}:{}/".format(HOST, PORT), data={'fib': 10})
-    assert response.status_code == 200
-    assert server.module in response.text
 
 
-def run_benchmark(path, script=None):
+def run_benchmark(path, wk, script=None):
     if script is not None:
         script_cmd = "-s {}".format(script)
     else:
         script_cmd = ''
     output = subprocess.check_output(
-        "wrk -c 64 -d 30s {} http://{}:{}/{}".format(script_cmd, HOST, PORT, path), shell=True,
+        "wrk -c {} -d 10s {} http://{}:{}/{}".format(wk, script_cmd, HOST, PORT, path), shell=True,
     )
     match = REQUESTS_SECOND_RE.search(output.decode())
     requests_second = float(match.group('reqsec'))
@@ -97,21 +62,53 @@ def run_benchmark(path, script=None):
         requests_second = requests_second * UNITS[match.group('unit')]
     return requests_second
 
-
 if __name__ == '__main__':
+    n = 7
+    
     results = defaultdict(list)
-    for name, server in SERVERS.items():
-        try:
-            print("Testing {} {}".format(name, datetime.now().isoformat()))
-            process = run_server(server)
-            sleep(5)
-            test_server(server)
-            results['get'].append((name, run_benchmark('10')))
-            results['post'].append((name, run_benchmark('', 'scripts/post.lua')))
-        finally:
-            process.terminate()
-            process.wait()
-    graph = Pyasciigraph()
-    for key, value in results.items():
-        for line in  graph.graph("{} requests/second".format(key), sorted(value, key=lambda result: result[1])):
-            print(line)
+    fig, ax = plt.subplots(figsize=(20, 10))
+    plt.xlabel('Workers')
+    plt.ylabel('Requests per second')
+    plt.title('Performance')
+    index = np.arange(n)
+    bar_width = 0.20
+    opacity = 0.8
+
+    for i in range(1, n + 1):
+        print(f'Running with {2**i} workers.')
+        for name, server in SERVERS.items():
+            try:
+                print("Testing {} {}".format(name, datetime.now().isoformat()))
+                process = run_server(server)
+                sleep(5)
+                test_server(server)
+                results[name].append(run_benchmark('10', 2**i))
+            finally:
+                process.terminate()
+                process.wait()
+    rects1 = plt.bar(index, results['flask-gunicorn-meinheld'], bar_width,
+                 alpha=opacity,
+                 color='b',
+                 label='Meinheld')
+    rects2 = plt.bar(index + bar_width, results['flask-gunicorn-gevent'], bar_width,
+                 alpha=opacity,
+                 color='g',
+                 label='Gevent')
+    plt.xticks(index + bar_width, (2**i for i in range(1, n + 1)))
+    plt.legend()
+    
+    def autolabel(rects, xpos='center'):
+        xpos = xpos.lower()
+        ha = {'center': 'center', 'right': 'left', 'left': 'right'}
+        offset = {'center': 0.5, 'right': 0.57, 'left': 0.43} 
+
+        for rect in rects:
+            height = rect.get_height()
+            ax.text(rect.get_x() + rect.get_width()*offset[xpos], 1.01*height,
+                   '{}'.format(height), ha=ha[xpos], va='bottom')
+
+
+    autolabel(rects1, "left")
+    autolabel(rects2, "right")
+
+    plt.show()

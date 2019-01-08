@@ -1,13 +1,6 @@
-aiohttp
-ascii_graph
-daphne
-eventlet
+matplotlib
+gevent
 Flask
 gunicorn
 meinheld
-Quart
 requests
-sanic
-trio
-uvicorn
-uvloop
