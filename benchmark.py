@@ -48,13 +48,9 @@ def test_server(server):
     assert server.module in response.text
 
 
-def run_benchmark(path, wk, script=None):
-    if script is not None:
-        script_cmd = "-s {}".format(script)
-    else:
-        script_cmd = ''
+def run_benchmark(path, wk):
     output = subprocess.check_output(
-        "wrk -c {} -d 10s {} http://{}:{}/{}".format(wk, script_cmd, HOST, PORT, path), shell=True,
+        "wrk -c {} -d 10s http://{}:{}/{}".format(wk, HOST, PORT, path), shell=True,
     )
     match = REQUESTS_SECOND_RE.search(output.decode())
     requests_second = float(match.group('reqsec'))
