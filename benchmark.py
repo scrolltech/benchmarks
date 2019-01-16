@@ -31,10 +31,10 @@ HOST = '127.0.0.1'
 PORT = 5000
 
 
-def run_server(server):
+def run_server(server, wk):
     if server.server_type == ServerType.gunicorn:
         return subprocess.Popen(
-            ['gunicorn', "{}:app".format(server.module), '-b', "{}:{}".format(HOST, PORT)] + server.settings,
+            ['gunicorn',"--workers={}".format(wk), "{}:app".format(server.module), '-b', "{}:{}".format(HOST, PORT)] + server.settings,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             cwd='servers',
         )
@@ -48,9 +48,9 @@ def test_server(server):
     assert server.module in response.text
 
 
-def run_benchmark(path, wk):
+def run_benchmark(path):
     output = subprocess.check_output(
-        "wrk -c {} -d 10s http://{}:{}/{}".format(wk, HOST, PORT, path), shell=True,
+        "wrk -c 100 -d 10s http://{}:{}/{}".format(wk, HOST, PORT, path), shell=True,
     )
     match = REQUESTS_SECOND_RE.search(output.decode())
     requests_second = float(match.group('reqsec'))
@@ -75,10 +75,10 @@ if __name__ == '__main__':
         for name, server in SERVERS.items():
             try:
                 print("Testing {} {}".format(name, datetime.now().isoformat()))
-                process = run_server(server)
+                process = run_server(server, 2**i)
                 sleep(5)
                 test_server(server)
-                results[name].append(run_benchmark('10', 2**i))
+                results[name].append(run_benchmark('10'))
             finally:
                 process.terminate()
                 process.wait()
